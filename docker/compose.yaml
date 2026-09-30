@@ -1,0 +1,64 @@
+# devagent — orchestrator + Codex sandbox image + Caddy.
+#
+#   cp docker/compose.example.env docker/.env      # fill in secrets
+#   cp config/agent.example.yaml config/agent.yaml # configure your GitHub repos and their commands
+#   docker compose -f docker/compose.yaml --env-file docker/.env up -d --build
+#
+# Runs, events, and checkpoints live only in the orchestrator process and are lost on restart.
+# OpenHands reaches each sandbox container on 127.0.0.1:<port>, so the orchestrator uses host networking. Caddy is
+# the only public entry point and only proxies /issues and /health. The run API remains host-only.
+
+name: devagent
+
+services:
+  # One-shot build dependency. It makes the image that the orchestrator starts for each Codex run.
+  sandbox-image:
+    image: devagent-sandbox:latest
+    build:
+      context: ..
+      dockerfile: docker/sandbox.Dockerfile
+      args:
+        INSTALL_DOTNET: ${INSTALL_DOTNET:-true}
+    entrypoint: ["/bin/true"]
+    restart: "no"
+
+  orchestrator:
+    build:
+      context: ..
+      dockerfile: docker/orchestrator.Dockerfile
+    restart: unless-stopped
+    network_mode: host
+    depends_on:
+      sandbox-image:
+        condition: service_completed_successfully
+    environment:
+      GITHUB_TOKEN: ${GITHUB_TOKEN:?set GITHUB_TOKEN in docker/.env}
+      CODEX_AUTH_JSON: ${CODEX_AUTH_JSON:?set CODEX_AUTH_JSON in docker/.env}
+      DEVAGENT_ADMIN_TOKEN: ${DEVAGENT_ADMIN_TOKEN:?set DEVAGENT_ADMIN_TOKEN in docker/.env}
+      DEVAGENT_HOST_WORKSPACES: ${DEVAGENT_WORKSPACES:-/var/lib/devagent/workspaces}
+    volumes:
+      - ../config/agent.yaml:/etc/devagent/agent.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Same path on host and in the container, so sandbox volume mounts resolve on the Docker host.
+      - ${DEVAGENT_WORKSPACES:-/var/lib/devagent/workspaces}:/var/lib/devagent/workspaces
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      DEVAGENT_DOMAIN: ${DEVAGENT_DOMAIN:?set DEVAGENT_DOMAIN in docker/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
+  <title id="title">Devagent request flow</title>
+  <desc id="desc">A GitHub issue URL enters FastAPI, is validated, stored in memory, queued, and processed by the LangGraph workflow using GitHub and a Codex sandbox.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#475569"/>
+    </marker>
+    <style>
+      .title { font: 700 24px Inter, system-ui, sans-serif; fill: #0f172a; }
+      .label { font: 600 15px Inter, system-ui, sans-serif; fill: #0f172a; text-anchor: middle; }
+      .small { font: 500 13px Inter, system-ui, sans-serif; fill: #475569; text-anchor: middle; }
+      .edge { fill: none; stroke: #475569; stroke-width: 2.2; marker-end: url(#arrow); }
+      .edge-label { font: 500 12px Inter, system-ui, sans-serif; fill: #475569; text-anchor: middle; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="520" rx="18" fill="#f8fafc"/>
+  <text x="40" y="48" class="title">Request flow</text>
+
+  <rect x="40" y="120" width="130" height="76" rx="12" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/>
+  <text x="105" y="153" class="label">User</text>
+  <text x="105" y="176" class="small">Issue URL</text>
+
+  <rect x="220" y="120" width="145" height="76" rx="12" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <text x="292.5" y="153" class="label">FastAPI</text>
+  <text x="292.5" y="176" class="small">POST /issues</text>
+
+  <path d="M435 158 L490 120 L545 158 L490 196 Z" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+  <text x="490" y="153" class="label">Valid?</text>
+  <text x="490" y="175" class="small">repo + budget</text>
+
+  <rect x="610" y="120" width="155" height="76" rx="38" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+  <text x="687.5" y="153" class="label">In-memory store</text>
+  <text x="687.5" y="176" class="small">Run + events</text>
+
+  <rect x="815" y="120" width="135" height="76" rx="12" fill="#ede9fe" stroke="#7c3aed" stroke-width="2"/>
+  <text x="882.5" y="153" class="label">Worker queue</text>
+  <text x="882.5" y="176" class="small">Run ID</text>
+
+  <rect x="1000" y="120" width="160" height="76" rx="12" fill="#f3e8ff" stroke="#9333ea" stroke-width="2"/>
+  <text x="1080" y="153" class="label">LangGraph</text>
+  <text x="1080" y="176" class="small">Workflow</text>
+
+  <rect x="405" y="300" width="170" height="72" rx="12" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+  <text x="490" y="332" class="label">Reject request</text>
+  <text x="490" y="354" class="small">Return 4xx</text>
+
+  <rect x="735" y="300" width="170" height="72" rx="12" fill="#ffedd5" stroke="#ea580c" stroke-width="2"/>
+  <text x="820" y="332" class="label">GitHub</text>
+  <text x="820" y="354" class="small">Issue, branch, PR</text>
+
+  <rect x="990" y="300" width="180" height="72" rx="12" fill="#cffafe" stroke="#0891b2" stroke-width="2"/>
+  <text x="1080" y="332" class="label">Codex sandbox</text>
+  <text x="1080" y="354" class="small">Edit, build, test</text>
+
+  <path d="M170 158 H220" class="edge"/>
+  <text x="195" y="144" class="edge-label">submit</text>
+  <path d="M365 158 H435" class="edge"/>
+  <path d="M545 158 H610" class="edge"/>
+  <text x="578" y="144" class="edge-label">yes</text>
+  <path d="M765 158 H815" class="edge"/>
+  <path d="M950 158 H1000" class="edge"/>
+
+  <path d="M490 196 V300" class="edge"/>
+  <text x="512" y="250" class="edge-label">no</text>
+
+  <path d="M292 196 V260 H820 V300" class="edge"/>
+  <text x="665" y="248" class="edge-label">read issue and comments</text>
+
+  <path d="M1080 196 V300" class="edge"/>
+  <text x="1128" y="248" class="edge-label">run Codex</text>
+
+  <path d="M1000 178 H930 V265 H820 V300" class="edge"/>
+  <text x="918" y="252" class="edge-label">push + draft PR</text>
+
+  <path d="M1000 138 H785 V95 H688 V120" class="edge"/>
+  <text x="865" y="84" class="edge-label">update status</text>
+
+  <text x="600" y="466" class="small">GitHub credentials stay in the orchestrator and are never passed to the Codex sandbox.</text>
+</svg>

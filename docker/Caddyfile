@@ -1,0 +1,14 @@
+{$DEVAGENT_DOMAIN} {
+	encode gzip
+
+	# Issue submission requires the configured bearer token. Run details remain host-only.
+	handle /issues {
+		reverse_proxy 127.0.0.1:8080
+	}
+	handle /health {
+		reverse_proxy 127.0.0.1:8080
+	}
+	handle {
+		respond 404
+	}
+}

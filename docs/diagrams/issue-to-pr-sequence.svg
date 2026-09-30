@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="780" viewBox="0 0 1200 780" role="img" aria-labelledby="title desc">
+  <title id="title">GitHub issue to draft pull request sequence</title>
+  <desc id="desc">The user submits an issue URL, FastAPI validates it, the worker coordinates GitHub and Codex, then publishes a draft pull request.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#475569"/>
+    </marker>
+    <style>
+      .title { font: 700 24px Inter, system-ui, sans-serif; fill: #0f172a; }
+      .participant { font: 700 14px Inter, system-ui, sans-serif; fill: #0f172a; text-anchor: middle; }
+      .message { font: 500 12px Inter, system-ui, sans-serif; fill: #334155; text-anchor: middle; }
+      .line { stroke: #94a3b8; stroke-width: 1.5; stroke-dasharray: 6 6; }
+      .call { fill: none; stroke: #475569; stroke-width: 1.8; marker-end: url(#arrow); }
+      .return { fill: none; stroke: #64748b; stroke-width: 1.6; stroke-dasharray: 6 5; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect width="1200" height="780" rx="18" fill="#f8fafc"/>
+  <text x="40" y="48" class="title">GitHub issue to draft PR</text>
+
+  <rect x="45" y="80" width="150" height="48" rx="10" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/>
+  <rect x="285" y="80" width="150" height="48" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <rect x="525" y="80" width="150" height="48" rx="10" fill="#ffedd5" stroke="#ea580c" stroke-width="2"/>
+  <rect x="765" y="80" width="150" height="48" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="2"/>
+  <rect x="1005" y="80" width="150" height="48" rx="10" fill="#cffafe" stroke="#0891b2" stroke-width="2"/>
+
+  <text x="120" y="110" class="participant">User</text>
+  <text x="360" y="110" class="participant">FastAPI</text>
+  <text x="600" y="110" class="participant">GitHub</text>
+  <text x="840" y="110" class="participant">Worker</text>
+  <text x="1080" y="110" class="participant">Codex sandbox</text>
+
+  <line x1="120" y1="128" x2="120" y2="735" class="line"/>
+  <line x1="360" y1="128" x2="360" y2="735" class="line"/>
+  <line x1="600" y1="128" x2="600" y2="735" class="line"/>
+  <line x1="840" y1="128" x2="840" y2="735" class="line"/>
+  <line x1="1080" y1="128" x2="1080" y2="735" class="line"/>
+
+  <path d="M120 165 H360" class="call"/>
+  <text x="240" y="156" class="message">Submit issue URL</text>
+
+  <path d="M360 205 H600" class="call"/>
+  <text x="480" y="196" class="message">Read issue and comments</text>
+
+  <path d="M600 245 H360" class="return"/>
+  <text x="480" y="236" class="message">Issue data</text>
+
+  <rect x="315" y="268" width="90" height="36" rx="8" fill="#fef3c7" stroke="#d97706"/>
+  <text x="360" y="291" class="message">Validate</text>
+
+  <path d="M360 330 H840" class="call"/>
+  <text x="600" y="321" class="message">Create and queue run</text>
+
+  <path d="M360 370 H120" class="return"/>
+  <text x="240" y="361" class="message">Return run ID</text>
+
+  <path d="M840 410 H600" class="call"/>
+  <text x="720" y="401" class="message">Started comment and clone</text>
+
+  <path d="M840 450 H1080" class="call"/>
+  <text x="960" y="441" class="message">Run Codex</text>
+
+  <path d="M1080 490 H840" class="return"/>
+  <text x="960" y="481" class="message">Edited files</text>
+
+  <rect x="785" y="513" width="110" height="36" rx="8" fill="#fef3c7" stroke="#d97706"/>
+  <text x="840" y="536" class="message">Guardrails</text>
+
+  <path d="M840 575 H1080" class="call"/>
+  <text x="960" y="566" class="message">Build and test</text>
+
+  <path d="M1080 615 H840" class="return"/>
+  <text x="960" y="606" class="message">Verification result</text>
+
+  <path d="M840 655 H600" class="call"/>
+  <text x="720" y="646" class="message">Push branch and create draft PR</text>
+
+  <path d="M600 695 H840" class="return"/>
+  <text x="720" y="686" class="message">Draft PR URL</text>
+
+  <path d="M840 735 H600" class="call"/>
+  <text x="720" y="726" class="message">Comment PR URL on issue</text>
+</svg>

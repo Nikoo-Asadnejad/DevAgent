@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="560" viewBox="0 0 1400 560" role="img" aria-labelledby="title desc">
+  <title id="title">Devagent implementation workflow</title>
+  <desc id="desc">A queued run moves through claim, prepare, implement, verify, and publish. Any stage can route to failure, and a manual retry creates a new run.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#475569"/>
+    </marker>
+    <marker id="red-arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#dc2626"/>
+    </marker>
+    <style>
+      .title { font: 700 24px Inter, system-ui, sans-serif; fill: #0f172a; }
+      .label { font: 700 15px Inter, system-ui, sans-serif; fill: #0f172a; text-anchor: middle; }
+      .small { font: 500 12px Inter, system-ui, sans-serif; fill: #475569; text-anchor: middle; }
+      .edge { fill: none; stroke: #475569; stroke-width: 2.2; marker-end: url(#arrow); }
+      .fail-edge { fill: none; stroke: #dc2626; stroke-width: 1.8; marker-end: url(#red-arrow); }
+      .retry { fill: none; stroke: #7c3aed; stroke-width: 2; stroke-dasharray: 7 6; marker-end: url(#arrow); }
+      .error { font: 600 11px Inter, system-ui, sans-serif; fill: #b91c1c; text-anchor: middle; }
+    </style>
+  </defs>
+
+  <rect width="1400" height="560" rx="18" fill="#f8fafc"/>
+  <text x="40" y="48" class="title">Implementation workflow</text>
+
+  <rect x="35" y="125" width="120" height="70" rx="35" fill="#e2e8f0" stroke="#64748b" stroke-width="2"/>
+  <text x="95" y="166" class="label">Queued</text>
+
+  <rect x="205" y="110" width="155" height="100" rx="12" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <text x="282.5" y="148" class="label">Claim</text>
+  <text x="282.5" y="172" class="small">Comment + branch</text>
+  <text x="282.5" y="191" class="small">name</text>
+
+  <rect x="410" y="110" width="155" height="100" rx="12" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <text x="487.5" y="148" class="label">Prepare</text>
+  <text x="487.5" y="172" class="small">Clone base + create</text>
+  <text x="487.5" y="191" class="small">local branch</text>
+
+  <rect x="615" y="110" width="155" height="100" rx="12" fill="#ede9fe" stroke="#7c3aed" stroke-width="2"/>
+  <text x="692.5" y="148" class="label">Implement</text>
+  <text x="692.5" y="172" class="small">Bootstrap + run</text>
+  <text x="692.5" y="191" class="small">Codex</text>
+
+  <rect x="820" y="110" width="155" height="100" rx="12" fill="#cffafe" stroke="#0891b2" stroke-width="2"/>
+  <text x="897.5" y="148" class="label">Verify</text>
+  <text x="897.5" y="172" class="small">Guardrails + commit</text>
+  <text x="897.5" y="191" class="small">build + test</text>
+
+  <rect x="1025" y="110" width="155" height="100" rx="12" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+  <text x="1102.5" y="148" class="label">Publish</text>
+  <text x="1102.5" y="172" class="small">Push branch + open</text>
+  <text x="1102.5" y="191" class="small">draft PR</text>
+
+  <rect x="1230" y="125" width="125" height="70" rx="35" fill="#bbf7d0" stroke="#16a34a" stroke-width="2"/>
+  <text x="1292.5" y="166" class="label">Done</text>
+
+  <path d="M155 160 H205" class="edge"/>
+  <path d="M360 160 H410" class="edge"/>
+  <path d="M565 160 H615" class="edge"/>
+  <path d="M770 160 H820" class="edge"/>
+  <path d="M975 160 H1025" class="edge"/>
+  <path d="M1180 160 H1230" class="edge"/>
+
+  <path d="M282 210 V315" class="fail-edge"/>
+  <path d="M487 210 V315" class="fail-edge"/>
+  <path d="M692 210 V315" class="fail-edge"/>
+  <path d="M897 210 V315" class="fail-edge"/>
+  <path d="M1102 210 V315" class="fail-edge"/>
+  <text x="282" y="267" class="error">error</text>
+  <text x="487" y="267" class="error">error</text>
+  <text x="692" y="267" class="error">error</text>
+  <text x="897" y="267" class="error">error</text>
+  <text x="1102" y="267" class="error">error</text>
+
+  <path d="M282 315 H1175" fill="none" stroke="#dc2626" stroke-width="2"/>
+  <rect x="560" y="350" width="280" height="88" rx="12" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+  <text x="700" y="383" class="label">Fail</text>
+  <text x="700" y="407" class="small">Redact error, record failed node,</text>
+  <text x="700" y="426" class="small">and comment on the issue</text>
+  <path d="M700 315 V350" class="fail-edge"/>
+
+  <rect x="925" y="360" width="150" height="68" rx="34" fill="#fecaca" stroke="#dc2626" stroke-width="2"/>
+  <text x="1000" y="400" class="label">Failed</text>
+  <path d="M840 394 H925" class="fail-edge"/>
+
+  <path d="M1000 428 V500 H95 V195" class="retry"/>
+  <text x="555" y="490" class="small">Manual retry creates a new run ID and branch</text>
+</svg>

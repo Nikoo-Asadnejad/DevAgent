@@ -1,0 +1,48 @@
+# Copy to config/agent.yaml (git-ignored). Secrets come from environment variables via ${VAR}.
+
+github:
+  token: ${GITHUB_TOKEN}
+
+budgets:
+  max_concurrent: 1
+  max_runs_per_day: 10
+  max_minutes_per_run: 45
+  max_usd_per_run: 5
+
+guardrails:
+  branch_prefix: "agent/"
+  protected_branches: [main, master, develop, "release/*"]
+  protected_paths:                 # glob; `**/` matches at any depth. These are also the defaults.
+    - ".github/**"
+    - "**/.gitlab-ci.yml"
+    - "**/Jenkinsfile"
+    - "**/.gitattributes"
+    - "**/.gitmodules"
+    - "**/*.env"
+    - "**/.env*"
+
+sandbox:
+  image: devagent-sandbox:latest
+  workspaces_dir: /var/lib/devagent/workspaces          # path inside the orchestrator container
+  host_workspaces_dir: ${DEVAGENT_HOST_WORKSPACES}      # same directory on the Docker host
+  # network: my-docker-network                       # optional: attach sandboxes to an existing Docker network
+  command_timeout_minutes: 30
+  instance: prod                                    # distinguishes deployments sharing one Docker host
+
+git:
+  author_name: devagent
+  author_email: devagent@example.com
+
+service:
+  host: 127.0.0.1                 # Caddy terminates TLS and proxies /issues here
+  port: 8080
+  admin_token: ${DEVAGENT_ADMIN_TOKEN}
+  log_level: INFO
+
+repos:
+  - repo: {owner: your-org, name: booking-api}
+    base: main
+    commands:
+      bootstrap: "dotnet restore"
+      build: "dotnet build --no-restore"
+      test: "dotnet test --no-build"
