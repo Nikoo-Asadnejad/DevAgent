@@ -192,19 +192,87 @@ your repositories do not need the .NET SDK in the Codex sandbox.
 Codex uses a subscription login: run `codex login` and set `CODEX_AUTH_JSON` to the contents of
 `~/.codex/auth.json`.
 
-## Project structure
+## Components
 
-```text
-src/devagent/
-├── main.py       # CLI entry point and composition
-├── app/          # HTTP API, issue intake, and worker scheduling
-├── core/         # Configuration, models, branch naming, and guardrails
-├── runtime/      # Git, sandbox, storage, HTTP, logging, and secret scanning
-├── workflow/     # claim → prepare → implement → verify → publish
-├── providers/    # GitHub and Codex adapters
-├── db/           # In-memory run/event tables and store
-└── prompts/      # Codex prompt construction and local rules
-```
+The API accepts an issue, the worker queues a run, and the workflow coordinates the adapters and runtime tools.
+The orchestrator owns GitHub access and Git operations; the sandbox provides a workspace where Codex can edit files.
+
+### Entry point and request handling
+
+- [`main.py`](src/devagent/main.py) implements `devagent serve` and `devagent check-config`. On startup it loads the
+  configuration, cleans up orphaned sandboxes from this deployment, builds the dependencies, starts worker threads,
+  and serves the API.
+- [`app/api.py`](src/devagent/app/api.py) defines the FastAPI routes. It checks the admin bearer token for issue and
+  run operations, translates intake errors into HTTP responses, and exposes an unauthenticated `/health` endpoint.
+- [`app/worker.py`](src/devagent/app/worker.py) validates submitted issues against their GitHub status, earlier runs,
+  issue comments, configured repositories, and the daily budget. It stores accepted runs, queues them, and processes
+  them with up to `max_concurrent` worker threads. A retry creates a new run for a failed one.
+- [`app/factories.py`](src/devagent/app/factories.py) constructs the GitHub tracker, GitHub code host, and Codex engine.
+  It also collects configured secret values for redaction.
+
+### Workflow
+
+- [`workflow/state.py`](src/devagent/workflow/state.py) defines the data passed between steps: the task, branch,
+  checkout path, engine result, verification result, PR, and any failure. Its `Deps` bundle supplies the adapters and
+  runtime tools to each step.
+- [`workflow/graph.py`](src/devagent/workflow/graph.py) connects the steps with LangGraph, records start/finish/error
+  events, checkpoints state in memory, and routes a step error to `fail`. It does not retry steps automatically.
+- [`workflow/nodes/claim.py`](src/devagent/workflow/nodes/claim.py) chooses the new branch, marks the run as running,
+  and comments on the issue. [`prepare.py`](src/devagent/workflow/nodes/prepare.py) clones the configured base branch
+  and creates that branch locally.
+- [`workflow/nodes/implement.py`](src/devagent/workflow/nodes/implement.py) builds the prompt, optionally runs the
+  repository bootstrap command, and asks Codex to implement the issue inside a sandbox.
+  [`verify.py`](src/devagent/workflow/nodes/verify.py) commits the changes locally, checks paths, file types, and
+  secrets, then runs the configured build and test commands in a fresh sandbox.
+- [`workflow/nodes/publish.py`](src/devagent/workflow/nodes/publish.py) pushes the verified branch, creates or reuses
+  its draft PR, comments the PR URL on the issue, and completes the run.
+  [`fail.py`](src/devagent/workflow/nodes/fail.py) records the failure and comments a redacted error.
+  [`shared.py`](src/devagent/workflow/nodes/shared.py) contains common repository, command, and comment helpers.
+
+### GitHub and coding adapters
+
+- [`providers/trackers/`](src/devagent/providers/trackers/) defines the task-tracker interface and its GitHub issue
+  adapter. The adapter parses issue URLs, reads issues and comments, and posts run comments.
+- [`providers/code_hosts/`](src/devagent/providers/code_hosts/) defines repository and PR operations. Its GitHub
+  adapter supplies the clone URL and push authentication, finds open PRs, and creates draft PRs.
+- [`providers/engines/`](src/devagent/providers/engines/) defines the coding-engine interface. `CodexEngine` runs
+  Codex through OpenHands and ACP, applies time and optional cost limits, and returns a redacted result.
+
+### Configuration, safety, and runtime
+
+- [`core/config.py`](src/devagent/core/config.py) loads `agent.yaml`, substitutes `${VAR}` values from the environment,
+  and validates GitHub, Codex, repository, budget, guardrail, sandbox, Git identity, and service settings.
+  [`core/models.py`](src/devagent/core/models.py) holds the shared task, repository, PR, run, and engine data models.
+- [`core/slug.py`](src/devagent/core/slug.py) creates branch-safe names from issue details.
+  [`core/guardrails.py`](src/devagent/core/guardrails.py) checks push targets, changed paths and file types, daily
+  budgets, and known secrets; it also redacts those secrets from output.
+- [`runtime/sandbox.py`](src/devagent/runtime/sandbox.py) starts a separate OpenHands Docker container per sandbox
+  session. The repository is writable there, but `.git` is read-only; the orchestrator removes the container when
+  the session ends and reaps orphaned containers at startup.
+- [`runtime/gitops.py`](src/devagent/runtime/gitops.py) performs clone, branch, commit, diff, and push operations in
+  the orchestrator with isolated Git settings. [`runtime/http.py`](src/devagent/runtime/http.py) allows provider HTTP
+  requests only when their method and path match an explicit rule.
+- [`runtime/secretscan.py`](src/devagent/runtime/secretscan.py) runs Gitleaks on the diff and fails verification if
+  scanning fails. [`runtime/logging.py`](src/devagent/runtime/logging.py) emits structured JSON logs with known
+  secrets masked.
+- [`runtime/storage.py`](src/devagent/runtime/storage.py) opens the process-local run store and LangGraph's in-memory
+  checkpointer. [`db/tables.py`](src/devagent/db/tables.py) defines the SQLite run and event tables, while
+  [`db/store.py`](src/devagent/db/store.py) creates, updates, lists, and retries runs. SQLite is in memory, so these
+  records and checkpoints disappear when the process stops.
+- [`prompts/`](src/devagent/prompts/) combines the issue and comments with local coding rules. It marks issue text as
+  untrusted task data before sending the prompt to Codex.
+
+### Deployment and supporting files
+
+- [`config/agent.example.yaml`](config/agent.example.yaml) shows repository commands and service settings;
+  [`.env.example`](.env.example) lists the environment variables used for secrets. Copy these to the ignored
+  `config/agent.yaml` and `.env` files for a local service.
+- [`docker/compose.yaml`](docker/compose.yaml) runs the orchestrator and Caddy and builds the sandbox image.
+  [`docker/orchestrator.Dockerfile`](docker/orchestrator.Dockerfile) packages the API, worker, Docker CLI, and
+  Gitleaks; [`docker/sandbox.Dockerfile`](docker/sandbox.Dockerfile) packages the OpenHands agent server, Codex ACP
+  adapter, and optional .NET toolchain. [`docker/Caddyfile`](docker/Caddyfile) proxies only `/issues` and `/health`.
+- [`tests/`](tests/) covers configuration, the API, issue intake, and the GitHub tracker. [`docs/`](docs/) contains
+  the design specification and the diagrams shown above.
 
 ## Next implementations
 
