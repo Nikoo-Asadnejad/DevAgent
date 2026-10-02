@@ -43,7 +43,7 @@ class GitHubSettings(Settings):
 
 class CodexConfig(Settings):
     command: list[str] = Field(
-        default_factory=lambda: ["npx", "-y", "@agentclientprotocol/codex-acp"],
+        default_factory=lambda: ["codex-acp"],
         min_length=1,
     )
     env: list[str] = Field(default_factory=lambda: ["CODEX_AUTH_JSON"])
