@@ -24,15 +24,54 @@ Design: [docs/superpowers/specs/2026-09-26-devagent-design.md](docs/superpowers/
 
 ![GitHub issue to draft PR sequence](docs/diagrams/issue-to-pr-sequence.svg)
 
+### Runtime request sequence
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API as FastAPI API
+    participant Worker
+    participant GitHub as GitHub adapters
+    participant Graph as LangGraph workflow
+    participant Git as GitOps
+    participant Sandbox as Docker sandbox
+    participant Codex as CodexEngine
+
+    Client->>API: POST /issues
+    API->>API: Validate bearer token and JSON
+    API->>Worker: submit_issue(issue_url)
+    Worker->>GitHub: Read issue and comments
+    GitHub-->>Worker: Task
+    Worker->>Worker: Validate status, duplicates, repo, budget
+    Worker-->>API: RunRecord(status=queued)
+    API-->>Client: 202 + run_id
+
+    Worker->>Graph: Start queued run
+    Graph->>GitHub: claim: add started comment
+    Graph->>Git: prepare: clone repository and create branch
+    Graph->>Sandbox: implement: start container
+    Sandbox->>Codex: Run coding agent
+    Codex-->>Sandbox: Edited files
+    Graph->>Git: verify: commit and inspect diff
+    Graph->>Sandbox: Run build and tests
+    Graph->>GitHub: publish: push branch and create draft PR
+    Graph-->>Worker: done or failed
+```
+
 The implementation chain remains `claim → prepare → implement → verify → publish`. Any failed step goes to
 `fail`, records the error, and comments on the issue. A failed run can be retried manually.
 
 ## Submit an issue
 
 The issue must be open and its `owner/repository` must appear in `config/agent.yaml`.
+For local requests from your shell, load the same `.env` used to start the service:
 
 ```bash
-curl -X POST https://agent.example.com/issues \
+set -a
+source .env
+set +a
+
+curl -X POST http://127.0.0.1:8080/issues \
   -H "Authorization: Bearer $DEVAGENT_ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"issue_url":"https://github.com/acme/booking-api/issues/42"}'
@@ -57,14 +96,20 @@ The endpoint returns:
 
 ## Configuration
 
-Copy the example and set secrets through environment variables:
+Copy the examples, then put the secret values in the Git-ignored root `.env` file:
 
 ```bash
 cp config/agent.example.yaml config/agent.yaml
-export GITHUB_TOKEN=github_pat_...
-export DEVAGENT_ADMIN_TOKEN=change-me-long-random
-export CODEX_AUTH_JSON="$(cat ~/.codex/auth.json)"
+cp .env.example .env
+# Edit .env to set GITHUB_TOKEN, DEVAGENT_ADMIN_TOKEN, and CODEX_AUTH_JSON.
+uv run --env-file .env devagent check-config --config config/agent.yaml
+uv run --env-file .env devagent serve --config config/agent.yaml
 ```
+
+`CODEX_AUTH_JSON` is the one-line JSON content of `~/.codex/auth.json` after `codex login`.
+Keep the single quotes around that value in `.env` so its JSON quotes survive parsing.
+`uv run --env-file .env` loads the file for that command; `uv run` alone does not load it.
+Use a long random value for `DEVAGENT_ADMIN_TOKEN`. Never commit `.env` or paste token values into issues.
 
 Minimal configuration:
 
@@ -177,5 +222,5 @@ is stable:
 uv sync
 uv run pytest
 uv run pyright
-uv run devagent check-config --config config/agent.yaml
+uv run --env-file .env devagent check-config --config config/agent.yaml
 ```
