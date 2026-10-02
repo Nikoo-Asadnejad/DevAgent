@@ -3,7 +3,6 @@
 import uuid
 from datetime import UTC, datetime
 from typing import Any
-
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import Engine, create_engine, func, select
 from sqlalchemy.exc import IntegrityError
