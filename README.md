@@ -1,12 +1,9 @@
-# devagent
+# DevAgent
 
-Devagent turns a GitHub issue into an implemented **draft pull request**.
-
-Send an open issue URL to one endpoint. Devagent reads the issue, clones its repository, creates a new branch, runs
-Codex, verifies the result, pushes the branch, and opens a draft PR for human review.
-
-GitHub is the only task source and code host. There are no tracker webhooks, polling jobs, or provider-selection
-settings.
+DevAgent turns a GitHub issue into a draft pull request. Built with Python, FastAPI, LangGraph, Pydantic, OpenHands,
+Docker, and Gitleaks, it clones the repository and creates an isolated sandbox for each task. OpenHands uses the Agent
+Client Protocol (ACP) to run a local coding agent—currently Codex—inside that sandbox. DevAgent then builds, tests,
+and scans the changes before opening a draft PR for review.
 
 Design: [docs/superpowers/specs/2026-09-26-devagent-design.md](docs/superpowers/specs/2026-09-26-devagent-design.md).
 
