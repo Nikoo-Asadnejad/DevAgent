@@ -5,7 +5,6 @@ from typing import Any
 from devagent.core.guardrails import ensure_new_branch, push_refspec
 from devagent.core.models import PrSpec, RunStatus
 from devagent.workflow.nodes.shared import (
-    comment_once,
     get_git_env,
     get_repo,
     get_repo_dir,
@@ -64,6 +63,5 @@ def publish(state: RunState, deps: Deps) -> dict[str, Any]:
             task_id=state.task.id,
         )
     )
-    comment_once(deps, state, "pr", f"opened draft PR: {pr.url}")
     deps.store.set_status(state.run_id, RunStatus.DONE, pr_url=pr.url)
     return {"pr": pr}

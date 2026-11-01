@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from devagent.core.config import RepoConfig
-from devagent.core.models import COMMENT_MARKER, RepoRef
+from devagent.core.models import RepoRef
 from devagent.runtime.sandbox import SandboxSession
 from devagent.workflow.state import Deps, RunState
 
@@ -33,20 +33,6 @@ def get_git_env(deps: Deps, state: RunState) -> dict[str, str]:
         key: value.get_secret_value()
         for key, value in deps.code_host.push_auth(repo).items()
     }
-
-
-def comment_once(deps: Deps, state: RunState, key: str, text: str) -> None:
-    """Post a task comment at most once per run, tracked in run events."""
-    if any(
-        event.node == "comment" and event.detail.get("key") == key
-        for event in deps.store.events(state.run_id)
-    ):
-        return
-    deps.tracker.add_comment(
-        state.task.id,
-        f"{COMMENT_MARKER}{state.run_id}] {deps.redactor.redact(text)}",
-    )
-    deps.store.add_event(state.run_id, "comment", "posted", {"key": key})
 
 
 def run_checked(

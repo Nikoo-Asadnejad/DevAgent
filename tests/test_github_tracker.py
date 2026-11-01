@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-import json
-
 import httpx
 import pytest
 from pydantic import SecretStr
 
 from devagent.core.config import GitHubSettings
-from devagent.providers.trackers.github import GitHubIssueTracker
+from devagent.providers.trackers.github import ALLOWLIST, GitHubIssueTracker
+from devagent.runtime.http import AllowlistedClient, ForbiddenRequest
 
 
-def test_reads_github_issue_and_comments_and_adds_comment() -> None:
+def test_reads_github_issue_and_comments() -> None:
     requests: list[httpx.Request] = []
 
     def handle(request: httpx.Request) -> httpx.Response:
@@ -47,12 +46,6 @@ def test_reads_github_issue_and_comments_and_adds_comment() -> None:
                     }
                 ],
             )
-        if (
-            request.url.path == "/repos/acme/widgets/issues/42/comments"
-            and request.method == "POST"
-        ):
-            assert json.loads(request.content) == {"body": "started"}
-            return httpx.Response(201, json={})
         return httpx.Response(404)
 
     tracker = GitHubIssueTracker(
@@ -63,7 +56,6 @@ def test_reads_github_issue_and_comments_and_adds_comment() -> None:
     # Act
     task = tracker.get_task_from_url("https://github.com/acme/widgets/issues/42")
     comments = tracker.get_comments(task.id)
-    tracker.add_comment(task.id, "started")
 
     # Assert
     assert task.id == "acme/widgets#42"
@@ -71,7 +63,24 @@ def test_reads_github_issue_and_comments_and_adds_comment() -> None:
     assert task.labels == ("bug", "backend")
     assert task.closed is False
     assert [comment.body for comment in comments] == ["Reproduces on main."]
-    assert [request.method for request in requests] == ["GET", "GET", "POST"]
+    assert [request.method for request in requests] == ["GET", "GET"]
+
+
+@pytest.mark.parametrize("method", ["POST", "PATCH", "DELETE"])
+def test_issue_writes_are_blocked_before_sending(method: str) -> None:
+    def unexpected_request(_: httpx.Request) -> httpx.Response:
+        pytest.fail("issue writes must never reach GitHub")
+
+    client = AllowlistedClient(
+        "https://api.github.com",
+        ALLOWLIST,
+        transport=httpx.MockTransport(unexpected_request),
+    )
+    try:
+        with pytest.raises(ForbiddenRequest):
+            client.request(method, "/repos/acme/widgets/issues/42/comments")
+    finally:
+        client.close()
 
 
 @pytest.mark.parametrize(

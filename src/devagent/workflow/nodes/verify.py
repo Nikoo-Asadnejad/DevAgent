@@ -47,17 +47,26 @@ def verify(state: RunState, deps: Deps) -> dict[str, Any]:
     if findings:
         raise StepFailed("possible secrets in the diff: " + "; ".join(findings))
 
+    outputs: list[str] = []
     with deps.sandbox.session(state.run_id, repo_dir) as session:
+        # Dependencies installed in the implementation container do not survive into this fresh sandbox.
+        if config.commands.bootstrap:
+            bootstrap = run_checked(
+                session, deps, "verification bootstrap", config.commands.bootstrap
+            )
+            outputs.append(f"$ {config.commands.bootstrap}\n{tail_output(bootstrap)}")
         build = run_checked(session, deps, "build", config.commands.build)
         test = run_checked(session, deps, "test", config.commands.test)
-    output = (
-        f"$ {config.commands.build}\n{tail_output(build)}\n\n"
-        f"$ {config.commands.test}\n{tail_output(test)}"
+    outputs.extend(
+        (
+            f"$ {config.commands.build}\n{tail_output(build)}",
+            f"$ {config.commands.test}\n{tail_output(test)}",
+        )
     )
     return {
         "verify": VerifyResult(
             passed=True,
-            output=output,
+            output="\n\n".join(outputs),
             changed_files=tuple(changed),
         )
     }

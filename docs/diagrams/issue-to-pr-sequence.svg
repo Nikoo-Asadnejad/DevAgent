@@ -40,7 +40,7 @@
   <text x="240" y="156" class="message">Submit issue URL</text>
 
   <path d="M360 205 H600" class="call"/>
-  <text x="480" y="196" class="message">Read issue and comments</text>
+  <text x="480" y="196" class="message">Read issue</text>
 
   <path d="M600 245 H360" class="return"/>
   <text x="480" y="236" class="message">Issue data</text>
@@ -55,7 +55,7 @@
   <text x="240" y="361" class="message">Return run ID</text>
 
   <path d="M840 410 H600" class="call"/>
-  <text x="720" y="401" class="message">Started comment and clone</text>
+  <text x="720" y="401" class="message">Clone repository</text>
 
   <path d="M840 450 H1080" class="call"/>
   <text x="960" y="441" class="message">Run Codex</text>
@@ -78,6 +78,6 @@
   <path d="M600 695 H840" class="return"/>
   <text x="720" y="686" class="message">Draft PR URL</text>
 
-  <path d="M840 735 H600" class="call"/>
-  <text x="720" y="726" class="message">Comment PR URL on issue</text>
+  <path d="M840 735 H120" class="return"/>
+  <text x="480" y="726" class="message">Run API exposes PR URL</text>
 </svg>

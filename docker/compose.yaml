@@ -19,6 +19,7 @@ services:
       dockerfile: docker/sandbox.Dockerfile
       args:
         INSTALL_DOTNET: ${INSTALL_DOTNET:-true}
+        DOTNET_CHANNEL: ${DOTNET_CHANNEL:-10.0}
     entrypoint: ["/bin/true"]
     restart: "no"
 

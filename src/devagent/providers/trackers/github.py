@@ -1,6 +1,6 @@
 """GitHub issues as the task source.
 
-The adapter can read issues and comments and add a comment. It cannot edit labels,
+The adapter can only read issues and comments. It cannot edit labels,
 state, assignees, milestones, or issue text.
 """
 
@@ -19,7 +19,6 @@ from devagent.providers.trackers.errors import TrackerRequestError
 ALLOWLIST = (
     AllowRule("GET", "/repos/{owner}/{repo}/issues/{number}"),
     AllowRule("GET", "/repos/{owner}/{repo}/issues/{number}/comments"),
-    AllowRule("POST", "/repos/{owner}/{repo}/issues/{number}/comments"),
 )
 
 _ISSUE_PATH = re.compile(r"^/([^/]+)/([^/]+)/issues/([1-9][0-9]*)/?$")
@@ -113,12 +112,6 @@ class GitHubIssueTracker:
             if len(batch) < _COMMENTS_PER_PAGE:
                 break
         return sorted(found, key=lambda comment: comment.created)
-
-    def add_comment(self, task_id: str, text: str) -> None:
-        owner, repo, number = self._parse_task_id(task_id)
-        self._call(
-            "POST", self._comments_path(owner, repo, number), json={"body": text}
-        )
 
     def _get_issue(self, owner: str, repo: str, number: int) -> Task:
         path = self._issue_path(owner, repo, number)

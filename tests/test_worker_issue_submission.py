@@ -27,9 +27,6 @@ class FakeTracker:
         assert task_id == self.task.id
         return self.comments
 
-    def add_comment(self, task_id: str, text: str) -> None:
-        raise AssertionError("submission must not add a comment before the claim node")
-
 
 def config() -> AgentConfig:
     return AgentConfig.model_validate(

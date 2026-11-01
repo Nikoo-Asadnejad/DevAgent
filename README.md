@@ -37,14 +37,14 @@ sequenceDiagram
     Client->>API: POST /issues
     API->>API: Validate bearer token and JSON
     API->>Worker: submit_issue(issue_url)
-    Worker->>GitHub: Read issue and comments
+    Worker->>GitHub: Read issue
     GitHub-->>Worker: Task
     Worker->>Worker: Validate status, duplicates, repo, budget
     Worker-->>API: RunRecord(status=queued)
     API-->>Client: 202 + run_id
 
     Worker->>Graph: Start queued run
-    Graph->>GitHub: claim: add started comment
+    Graph->>Graph: claim: assign branch and mark running
     Graph->>Git: prepare: clone repository and create branch
     Graph->>Sandbox: implement: start container
     Sandbox->>Codex: Run coding agent
@@ -56,7 +56,7 @@ sequenceDiagram
 ```
 
 The implementation chain remains `claim → prepare → implement → verify → publish`. Any failed step goes to
-`fail`, records the error, and comments on the issue. A failed run can be retried manually.
+`fail` and records the error in the run API. Issues and their comments are read-only. A failed run can be retried manually.
 
 ## Submit an issue
 
@@ -87,7 +87,7 @@ The endpoint returns:
 - `202` when the run is queued.
 - `400` for an invalid issue URL.
 - `404` when GitHub cannot find the issue.
-- `409` when the issue was already submitted or already contains a devagent run comment.
+- `409` when the issue was already submitted in the current service process.
 - `422` for a closed issue or an unconfigured repository.
 - `429` when the daily run budget is exhausted.
 
@@ -129,7 +129,7 @@ repos:
 `GITHUB_TOKEN` should be a fine-grained token scoped only to configured repositories, with:
 
 - Contents: read and write (clone and push).
-- Issues: read and write (read the task and add run comments).
+- Issues: read (read the task and existing comments).
 - Pull requests: read and write (find or create the draft PR).
 - Metadata: read (included by GitHub for fine-grained tokens).
 
@@ -137,25 +137,24 @@ The GitHub token stays in the orchestrator. It is not passed to the coding-agent
 
 ## What happens during a run
 
-1. `POST /issues` fetches the issue and comments, rejects closed, duplicate, or unconfigured issues, applies the
+1. `POST /issues` fetches the issue, rejects closed, duplicate, or unconfigured issues, applies the
    daily budget, creates a queued run, and returns its ID.
-2. **Claim** comments `[devagent:<run>] started` and creates a unique
+2. **Claim** marks the run as running and assigns a unique
    `agent/<owner-repo-issue>-<slug>-<run>` branch name.
 3. **Prepare** clones the configured base branch and creates the new local branch.
 4. **Implement** runs the optional bootstrap on the unchanged base, then lets Codex edit the working tree in an
    OpenHands sandbox.
 5. **Verify** commits locally, rejects protected paths, symlinks, gitlinks, nested repositories and secrets, then
-   runs the configured build and test commands in a fresh sandbox.
-6. **Publish** pushes only the new `agent/*` branch, opens a draft PR, comments its URL on the issue, and completes
-   the run.
-7. **Fail** records the failed node and comments a redacted error on the issue. It never pushes a failed result.
+   repeats the optional bootstrap and runs the configured build and test commands in a fresh sandbox.
+6. **Publish** pushes only the new `agent/*` branch, opens a draft PR, and records its URL in the run API.
+7. **Fail** records the failed node and a redacted error in the run API. It never pushes a failed result.
 
 ## Guardrails
 
 - Never pushes to an existing branch or outside `agent/*`; never force-pushes.
 - Never merges, approves, closes, or marks a pull request ready.
-- Never edits or closes an issue; it only reads and adds comments.
-- Restricts GitHub HTTP calls to issue reads/comments and draft-PR reads/creation.
+- Never writes to issues or their comments; it only reads them.
+- Restricts GitHub HTTP calls to issue/comment reads and draft-PR reads/creation.
 - Keeps GitHub credentials out of the sandbox, prompt, repository config, and logs.
 - Rejects protected paths and secret-bearing diffs before push.
 - Applies concurrent-run, daily-run, wall-clock, and optional cost limits.
@@ -171,8 +170,8 @@ All run endpoints require `Authorization: Bearer $DEVAGENT_ADMIN_TOKEN`:
 - `GET /runs/{id}` — includes per-node events
 - `POST /runs/{id}/retry` — only failed runs; creates a fresh run and branch
 
-Runs, events, and LangGraph checkpoints are held in memory and are lost when the orchestrator restarts. The
-`[devagent:...]` issue comment still prevents the same issue from being submitted again after a restart.
+Runs, events, and LangGraph checkpoints are held in memory and are lost when the orchestrator restarts.
+Duplicate protection applies only within the current process; check existing PRs before resubmitting after a restart.
 
 ## Docker Compose
 
@@ -183,8 +182,9 @@ cp config/agent.example.yaml config/agent.yaml
 docker compose -f docker/compose.yaml --env-file docker/.env up -d --build
 ```
 
-Compose builds both the orchestrator and `devagent-sandbox:latest`. Set `INSTALL_DOTNET=false` in `docker/.env` if
-your repositories do not need the .NET SDK in the Codex sandbox.
+Compose builds both the orchestrator and `devagent-sandbox:latest`. The sandbox includes .NET 10 and ICU by default.
+Set `DOTNET_CHANNEL` in `docker/.env` to match your repositories' target framework or `global.json`, or set
+`INSTALL_DOTNET=false` if they do not need .NET. Rebuild the sandbox after changing these values.
 
 Codex uses a subscription login: run `codex login` and set `CODEX_AUTH_JSON` to the contents of
 `~/.codex/auth.json`.
@@ -202,7 +202,7 @@ The orchestrator owns GitHub access and Git operations; the sandbox provides a w
 - [`app/api.py`](src/devagent/app/api.py) defines the FastAPI routes. It checks the admin bearer token for issue and
   run operations, translates intake errors into HTTP responses, and exposes an unauthenticated `/health` endpoint.
 - [`app/worker.py`](src/devagent/app/worker.py) validates submitted issues against their GitHub status, earlier runs,
-  issue comments, configured repositories, and the daily budget. It stores accepted runs, queues them, and processes
+  configured repositories, and the daily budget. It stores accepted runs, queues them, and processes
   them with up to `max_concurrent` worker threads. A retry creates a new run for a failed one.
 - [`app/factories.py`](src/devagent/app/factories.py) constructs the GitHub tracker, GitHub code host, and Codex engine.
   It also collects configured secret values for redaction.
@@ -214,22 +214,22 @@ The orchestrator owns GitHub access and Git operations; the sandbox provides a w
   runtime tools to each step.
 - [`workflow/graph.py`](src/devagent/workflow/graph.py) connects the steps with LangGraph, records start/finish/error
   events, checkpoints state in memory, and routes a step error to `fail`. It does not retry steps automatically.
-- [`workflow/nodes/claim.py`](src/devagent/workflow/nodes/claim.py) chooses the new branch, marks the run as running,
-  and comments on the issue. [`prepare.py`](src/devagent/workflow/nodes/prepare.py) clones the configured base branch
+- [`workflow/nodes/claim.py`](src/devagent/workflow/nodes/claim.py) chooses the new branch and marks the run as running.
+  [`prepare.py`](src/devagent/workflow/nodes/prepare.py) clones the configured base branch
   and creates that branch locally.
 - [`workflow/nodes/implement.py`](src/devagent/workflow/nodes/implement.py) builds the prompt, optionally runs the
   repository bootstrap command, and asks Codex to implement the issue inside a sandbox.
   [`verify.py`](src/devagent/workflow/nodes/verify.py) commits the changes locally, checks paths, file types, and
-  secrets, then runs the configured build and test commands in a fresh sandbox.
+  secrets, then repeats the optional bootstrap and runs the build and test commands in a fresh sandbox.
 - [`workflow/nodes/publish.py`](src/devagent/workflow/nodes/publish.py) pushes the verified branch, creates or reuses
-  its draft PR, comments the PR URL on the issue, and completes the run.
-  [`fail.py`](src/devagent/workflow/nodes/fail.py) records the failure and comments a redacted error.
-  [`shared.py`](src/devagent/workflow/nodes/shared.py) contains common repository, command, and comment helpers.
+  its draft PR, records the PR URL, and completes the run.
+  [`fail.py`](src/devagent/workflow/nodes/fail.py) records the failure and a redacted error.
+  [`shared.py`](src/devagent/workflow/nodes/shared.py) contains common repository and command helpers.
 
 ### GitHub and coding adapters
 
 - [`providers/trackers/`](src/devagent/providers/trackers/) defines the task-tracker interface and its GitHub issue
-  adapter. The adapter parses issue URLs, reads issues and comments, and posts run comments.
+  adapter. The adapter parses issue URLs and provides read-only access to issues and comments.
 - [`providers/code_hosts/`](src/devagent/providers/code_hosts/) defines repository and PR operations. Its GitHub
   adapter supplies the clone URL and push authentication, finds open PRs, and creates draft PRs.
 - [`providers/engines/`](src/devagent/providers/engines/) defines the coding-engine interface. `CodexEngine` runs

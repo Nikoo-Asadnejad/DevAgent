@@ -10,10 +10,6 @@ class Frozen(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
-COMMENT_MARKER = "[devagent:"
-"""Prefix of every task comment devagent posts; a task carrying one has already been handled."""
-
-
 class Priority(StrEnum):
     URGENT = "urgent"
     HIGH = "high"

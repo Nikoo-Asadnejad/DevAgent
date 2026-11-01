@@ -39,7 +39,7 @@ def _secret_values(model: BaseModel) -> Iterator[str]:
 
 
 def collect_secrets(cfg: AgentConfig, environ: Mapping[str, str]) -> list[str]:
-    """Every secret value the service knows, so logs, comments and PR bodies can be redacted."""
+    """Every secret value the service knows, so logs and PR bodies can be redacted."""
     values = list(_secret_values(cfg))
     for credential in cfg.codex.credentials(environ).values():
         raw = credential.get_secret_value()

@@ -18,13 +18,15 @@ RUN set -eu; \
     codex-acp --version
 
 # --- repo toolchains -------------------------------------------------------------------------------------------------
-# Add what your repos' bootstrap/build/test commands need. Example: .NET 8 SDK for `dotnet restore/build/test`.
+# Match DOTNET_CHANNEL to your repositories' target framework (or global.json).
 ARG INSTALL_DOTNET=true
+ARG DOTNET_CHANNEL=10.0
 RUN if [ "$INSTALL_DOTNET" = "true" ]; then \
-      apt-get update && apt-get install -y --no-install-recommends wget ca-certificates \
+      apt-get update && apt-get install -y --no-install-recommends wget ca-certificates libicu-dev \
       && wget -q https://dot.net/v1/dotnet-install.sh -O /tmp/dotnet-install.sh \
-      && bash /tmp/dotnet-install.sh --channel 8.0 --install-dir /usr/share/dotnet \
+      && bash /tmp/dotnet-install.sh --channel "$DOTNET_CHANNEL" --install-dir /usr/share/dotnet \
       && ln -sf /usr/share/dotnet/dotnet /usr/local/bin/dotnet \
+      && dotnet --info \
       && rm -rf /tmp/dotnet-install.sh /var/lib/apt/lists/*; \
     fi
 ENV DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1

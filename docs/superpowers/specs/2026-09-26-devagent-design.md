@@ -1,6 +1,6 @@
 # Devagent design — GitHub issue to draft pull request
 
-Status: implemented simplification, 2026-09-30.
+Status: implemented simplification, updated 2026-10-16 for read-only issue access.
 
 ## 1. Goal
 
@@ -13,7 +13,7 @@ build/test knowledge remains configurable. The implementation workflow remains a
 ### In scope
 
 - Explicit issue submission through `POST /issues`.
-- GitHub issue and comment reads, issue comments, repository clone/push, and draft pull requests.
+- GitHub issue and comment reads, repository clone/push, and draft pull requests.
 - Codex through OpenHands `ACPAgent`.
 - `claim → prepare → implement → verify → publish`, with every failure routed to `fail`.
 - Process-local runs, events, and LangGraph checkpoints.
@@ -23,7 +23,7 @@ build/test knowledge remains configurable. The implementation workflow remains a
 
 - Tracker polling or webhooks.
 - Automatic discovery based on labels or status.
-- Editing or closing issues.
+- Writing to issues or their comments.
 - Merging, approving, closing, or marking pull requests ready.
 - Automatic retry.
 
@@ -40,7 +40,7 @@ Request:
 ```
 
 The URL must be a plain issue URL on the configured GitHub web host. Pull-request URLs, closed issues, repositories
-not present in `repos`, duplicate submissions, and issues carrying an earlier `[devagent:...]` comment are rejected.
+not present in `repos`, and duplicate submissions in the current service process are rejected.
 
 Success is `202 Accepted`:
 
@@ -90,7 +90,7 @@ FastAPI POST /issues
         |
         v
 Worker.submit_issue
-  |-- GitHubIssueTracker: issue + comments
+  |-- GitHubIssueTracker: issue
   |-- repo routing + budget + duplicate checks
   `-- RunStore: queued run
         |
@@ -101,7 +101,7 @@ LangGraph
       +--------+-----------+----------+-----------> fail
 ```
 
-- `GitHubIssueTracker` implements read/comment-only task access.
+- `GitHubIssueTracker` implements read-only issue and comment access.
 - `GitHubHost` implements clone authentication and draft-PR access.
 - Both use the same settings/token but expose deliberately narrow interfaces.
 - `Worker` validates explicit submissions and owns the bounded worker threads.
@@ -114,7 +114,6 @@ LangGraph
 - Set the run to `running`.
 - Compute `agent/<issue-id>-<ascii-title-slug>-<run-id>`.
 - Validate the push target.
-- Add the idempotent `started` issue comment.
 
 ### Prepare
 
@@ -135,6 +134,7 @@ LangGraph
 - Commit the working tree locally as the orchestrator.
 - Reject an empty diff, nested repository, symlink, gitlink, protected path, configured credential, or gitleaks
   finding.
+- Repeat the optional bootstrap in the fresh verification sandbox so its dependencies are available.
 - Run configured build and test commands in a fresh sandbox.
 
 ### Publish
@@ -142,12 +142,12 @@ LangGraph
 - Refuse an existing remote branch unless it is the identical commit from this run.
 - Push with an explicit `HEAD:refs/heads/agent/...` refspec and no force option.
 - Reuse an existing open PR from the run branch or create a draft PR.
-- Comment the PR URL and set the run to `done`.
+- Record the PR URL in the run API and set the run to `done`.
 
 ### Fail
 
 - Redact configured secrets from the error.
-- Add one idempotent failure comment naming the failed node.
+- Record the failed node in run events.
 - Set the run to `failed`; do not push.
 
 ## 6. GitHub access boundary
@@ -156,7 +156,6 @@ Allowed REST operations are limited to:
 
 - `GET /repos/{owner}/{repo}/issues/{number}`
 - `GET /repos/{owner}/{repo}/issues/{number}/comments`
-- `POST /repos/{owner}/{repo}/issues/{number}/comments`
 - `GET /repos/{owner}/{repo}/pulls`
 - `POST /repos/{owner}/{repo}/pulls` with `draft: true`
 
@@ -164,19 +163,19 @@ Git clone, remote-branch checks, and push use temporary `http.extraheader` authe
 written to `.git/config`, passed to the coding sandbox, or included in prompts. Git runs with an isolated home,
 empty global config, disabled hooks, disabled submodules, and a minimal environment.
 
-Required fine-grained token permissions for configured repositories are Contents read/write, Issues read/write,
+Required fine-grained token permissions for configured repositories are Contents read/write, Issues read,
 Pull requests read/write, and Metadata read.
 
 ## 7. Process-local state and idempotency
 
 An in-memory SQLite store holds the complete validated issue snapshot, repository index, engine, branch, status,
-PR URL, error, cost, timestamps, node events, and idempotent comment markers. LangGraph uses its in-memory
+PR URL, error, cost, timestamps, and node events. LangGraph uses its in-memory
 checkpointer.
 
 - Runs, events, and checkpoints are lost when the orchestrator restarts.
 - Active runs are not resumed after a restart.
-- Side effects are idempotent: comments use event keys, push compares SHA, and publish reuses the open PR.
-- A prior `[devagent:...]` issue comment prevents accidental reprocessing after loss of in-memory state.
+- Push compares SHA, and publish reuses the open PR for the run branch.
+- Duplicate protection is process-local; inspect existing PRs before resubmitting after a restart.
 
 ## 8. Security and operational constraints
 
@@ -186,7 +185,7 @@ checkpointer.
 - Protected files include GitHub workflows, env files, git attributes/modules, and other configured patterns.
 - Task text is untrusted and is wrapped as data in the agent prompt.
 - The coding sandbox receives the working tree and Codex credential, not the GitHub token.
-- The orchestrator performs every commit, push, issue comment, and PR operation.
+- The orchestrator performs every commit, push, and PR operation. The issue adapter cannot send writes.
 - Concurrency, runs/day, per-run wall time, command timeout, and optional cost are bounded.
 
 Repository CI must treat `agent/*` branches as untrusted code and must not expose production secrets without manual
@@ -200,6 +199,6 @@ The implementation is accepted when:
 - Invalid URL, missing issue, closed issue, duplicate issue, and unknown repo return explicit client errors.
 - The GitHub adapter maps issue fields/comments correctly and only sends allowlisted requests.
 - A successful fake workflow preserves `claim → prepare → implement → verify → publish` and produces a draft PR.
-- A node error routes to `fail`, records an event, and posts one redacted comment.
+- A node error routes to `fail` and records a redacted error without writing to the issue.
 - Configuration rejects missing `GITHUB_TOKEN`, missing `CODEX_AUTH_JSON`, and malformed repo coordinates.
 - `pytest` and strict `pyright` pass.

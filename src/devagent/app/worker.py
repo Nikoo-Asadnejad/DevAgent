@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from devagent.core.config import AgentConfig, RepoConfig
 from devagent.db.store import RunRecord, RunStore
 from devagent.core.guardrails import Redactor, check_daily_budget
-from devagent.core.models import COMMENT_MARKER, RunStatus, Task
+from devagent.core.models import RunStatus, Task
 from devagent.providers.trackers.base import TaskTracker
 
 log = logging.getLogger(__name__)
@@ -71,13 +71,6 @@ class Worker:
             raise IssueNotRunnable("the GitHub issue is closed")
         if self._store.has_run_for_task(task.id):
             raise IssueAlreadySubmitted(f"GitHub issue {task.id} already has a run")
-        if any(
-            comment.body.startswith(COMMENT_MARKER)
-            for comment in self._tracker.get_comments(task.id)
-        ):
-            raise IssueAlreadySubmitted(
-                f"GitHub issue {task.id} already has a devagent comment"
-            )
         repo = _match_repo(task, self._cfg.repos)
         if repo is None:
             owner = task.scope.get("owner", "")
