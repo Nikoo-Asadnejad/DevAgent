@@ -48,7 +48,7 @@ def verify(state: RunState, deps: Deps) -> dict[str, Any]:
         raise StepFailed("possible secrets in the diff: " + "; ".join(findings))
 
     outputs: list[str] = []
-    with deps.sandbox.session(state.run_id, repo_dir) as session:
+    with deps.sandbox.session(state.run_id, repo_dir, image=state.sandbox_image) as session:
         # Dependencies installed in the implementation container do not survive into this fresh sandbox.
         if config.commands.bootstrap:
             bootstrap = run_checked(

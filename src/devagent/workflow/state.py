@@ -23,6 +23,7 @@ class RunState(BaseModel):
     engine: str
     branch: str | None = None
     repo_dir: str | None = None
+    sandbox_image: str | None = None
     engine_result: EngineResult | None = None
     verify: VerifyResult | None = None
     pr: PrRef | None = None

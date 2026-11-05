@@ -24,7 +24,9 @@ from typing import Any, Protocol
 from pydantic import BaseModel, ConfigDict
 
 from devagent.core.config import SandboxConfig
+from devagent.core.dotnet import detect_dotnet
 from devagent.providers.engines.base import Workspace
+from devagent.runtime.sandbox_images import SandboxImageBuilder
 
 REPO_MOUNT = "/workspace/repo"
 RUN_LABEL = "devagent.run"
@@ -49,8 +51,10 @@ class SandboxSession(Protocol):
 
 
 class Sandbox(Protocol):
+    def prepare(self, repo_dir: Path) -> str: ...
+
     def session(
-        self, run_id: str, repo_dir: Path
+        self, run_id: str, repo_dir: Path, *, image: str | None = None
     ) -> AbstractContextManager[SandboxSession]: ...
 
 
@@ -211,21 +215,29 @@ class OpenHandsSandbox:
         *,
         workspace_factory: Callable[..., _WorkspaceLike] = _hardened_workspace,
         reaper: Callable[[str], int] | None = None,
+        image_builder: SandboxImageBuilder | None = None,
     ) -> None:
         self._cfg = cfg
         self._factory = workspace_factory
+        self._images = image_builder or SandboxImageBuilder()
 
         def default_reaper(run_id: str) -> int:
             return reap_sandbox_containers(run_id, instance=cfg.instance)
 
         self._reap: Callable[[str], int] = reaper or default_reaper
 
+    def prepare(self, repo_dir: Path) -> str:
+        requirements = detect_dotnet(repo_dir) if self._cfg.detect_dotnet else None
+        return self._images.prepare(self._cfg.image, requirements)
+
     @contextmanager
-    def session(self, run_id: str, repo_dir: Path) -> Generator[SandboxSession]:
+    def session(
+        self, run_id: str, repo_dir: Path, *, image: str | None = None
+    ) -> Generator[SandboxSession]:
         # A crashed orchestrator can leave this run's previous container running on the same tree.
         self._reap(run_id)
         ws = self._factory(
-            server_image=self._cfg.image,
+            server_image=image or self._cfg.image,
             volumes=volume_mounts(repo_dir, self._cfg),
             working_dir=REPO_MOUNT,
             network=self._cfg.network,

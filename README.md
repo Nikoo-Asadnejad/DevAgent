@@ -141,7 +141,8 @@ The GitHub token stays in the orchestrator. It is not passed to the coding-agent
    daily budget, creates a queued run, and returns its ID.
 2. **Claim** marks the run as running and assigns a unique
    `agent/<owner-repo-issue>-<slug>-<run>` branch name.
-3. **Prepare** clones the configured base branch and creates the new local branch.
+3. **Prepare** clones the configured base branch, creates the new local branch, detects .NET requirements, and
+   selects or builds a cached toolchain image. The run retains its immutable Docker image ID.
 4. **Implement** runs the optional bootstrap on the unchanged base, then lets Codex edit the working tree in an
    OpenHands sandbox.
 5. **Verify** commits locally, rejects protected paths, symlinks, gitlinks, nested repositories and secrets, then
@@ -182,9 +183,24 @@ cp config/agent.example.yaml config/agent.yaml
 docker compose -f docker/compose.yaml --env-file docker/.env up -d --build
 ```
 
-Compose builds both the orchestrator and `devagent-sandbox:latest`. The sandbox includes .NET 10 and ICU by default.
-Set `DOTNET_CHANNEL` in `docker/.env` to match your repositories' target framework or `global.json`, or set
-`INSTALL_DOTNET=false` if they do not need .NET. Rebuild the sandbox after changing these values.
+Compose builds the orchestrator and the common `devagent-sandbox:latest` image with OpenHands, Codex ACP, and ICU
+(International Components for Unicode, used by .NET for culture-aware formatting, sorting, and casing).
+
+After cloning, DevAgent reads `global.json` first and honors `sdk.version`, `rollForward`, and `allowPrerelease`.
+Otherwise it chooses a stable SDK for the highest detected target framework. It reads `TargetFramework` and
+`TargetFrameworks` from project files and the nearest `Directory.Build.props`, including simple property references,
+empty-property defaults, and literal local property imports. Older target frameworks receive additional ASP.NET Core
+runtimes, which also include the .NET runtime. SDK and runtime versions come from Microsoft's release metadata.
+
+Toolchain layers are cached by base image ID, detected requirements, and build recipe. Cache hits need no metadata
+lookup or build. A cached resolution stays pinned until its image is removed or the base/requirements/recipe changes.
+Implementation and verification both use the selected image ID, even if a tag or project file changes during the run.
+Repositories without .NET projects use the common image directly.
+
+Detection does not execute repository MSBuild code. Unresolved/dynamic properties, conflicting SDK policies,
+explicit `RuntimeFrameworkVersion`, `sdk.paths`, and platform-specific or .NET Framework targets require a custom
+image. Set `sandbox.detect_dotnet: false` alongside `sandbox.image` to use that image directly.
+Remove the old `DOTNET_CHANNEL` and `INSTALL_DOTNET` build settings; toolchains are now selected per repository.
 
 Codex uses a subscription login: run `codex login` and set `CODEX_AUTH_JSON` to the contents of
 `~/.codex/auth.json`.
@@ -246,6 +262,9 @@ The orchestrator owns GitHub access and Git operations; the sandbox provides a w
 - [`runtime/sandbox.py`](src/devagent/runtime/sandbox.py) starts a separate OpenHands Docker container per sandbox
   session. The repository is writable there, but `.git` is read-only; the orchestrator removes the container when
   the session ends and reaps orphaned containers at startup.
+- [`core/dotnet.py`](src/devagent/core/dotnet.py) inspects repository toolchain requirements and applies SDK matching
+  policies. [`runtime/sandbox_images.py`](src/devagent/runtime/sandbox_images.py) resolves official releases and builds
+  cached toolchain layers from a trusted recipe with no repository files in the Docker build context.
 - [`runtime/gitops.py`](src/devagent/runtime/gitops.py) performs clone, branch, commit, diff, and push operations in
   the orchestrator with isolated Git settings. [`runtime/http.py`](src/devagent/runtime/http.py) allows provider HTTP
   requests only when their method and path match an explicit rule.
@@ -267,7 +286,7 @@ The orchestrator owns GitHub access and Git operations; the sandbox provides a w
 - [`docker/compose.yaml`](docker/compose.yaml) runs the orchestrator and Caddy and builds the sandbox image.
   [`docker/orchestrator.Dockerfile`](docker/orchestrator.Dockerfile) packages the API, worker, Docker CLI, and
   Gitleaks; [`docker/sandbox.Dockerfile`](docker/sandbox.Dockerfile) packages the OpenHands agent server, Codex ACP
-  adapter, and optional .NET toolchain. [`docker/Caddyfile`](docker/Caddyfile) proxies only `/issues` and `/health`.
+  adapter, and ICU common dependencies. [`docker/Caddyfile`](docker/Caddyfile) proxies only `/issues` and `/health`.
 - [`tests/`](tests/) covers configuration, the API, issue intake, and the GitHub tracker. [`docs/`](docs/) contains
   the design specification and the diagrams shown above.
 

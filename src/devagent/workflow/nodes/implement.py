@@ -21,7 +21,9 @@ def implement(state: RunState, deps: Deps) -> dict[str, Any]:
         deps.tracker.get_comments(state.task.id),
         deps.rules,
     )
-    with deps.sandbox.session(state.run_id, get_repo_dir(deps, state)) as session:
+    with deps.sandbox.session(
+        state.run_id, get_repo_dir(deps, state), image=state.sandbox_image
+    ) as session:
         if config.commands.bootstrap:
             run_checked(
                 session,

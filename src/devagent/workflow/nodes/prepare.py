@@ -19,4 +19,6 @@ def prepare(state: RunState, deps: Deps) -> dict[str, Any]:
         )
         assert state.branch is not None
         deps.git.create_branch(repo_dir, state.branch)
-    return {"repo_dir": str(repo_dir)}
+    image = state.sandbox_image or deps.sandbox.prepare(repo_dir)
+    deps.store.add_event(state.run_id, "prepare", "image", {"image": image})
+    return {"repo_dir": str(repo_dir), "sandbox_image": image}

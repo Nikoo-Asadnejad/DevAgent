@@ -120,6 +120,8 @@ LangGraph
 - Resolve the configured repository from the issue's owner/name.
 - Clone only the configured base branch with submodules disabled.
 - Create the new local branch.
+- Detect .NET SDK/runtime requirements from global.json and project/shared properties without executing MSBuild.
+- Resolve or reuse a cached toolchain image and retain its immutable ID for implementation and verification.
 - Reuse the workspace if the node is invoked more than once in the same process.
 
 ### Implement
@@ -136,6 +138,7 @@ LangGraph
   finding.
 - Repeat the optional bootstrap in the fresh verification sandbox so its dependencies are available.
 - Run configured build and test commands in a fresh sandbox.
+- Use the same image ID selected during prepare, even when the agent changes project files.
 
 ### Publish
 

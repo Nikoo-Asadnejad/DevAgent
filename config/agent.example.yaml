@@ -22,6 +22,8 @@ guardrails:
     - "**/.env*"
 
 sandbox:
+  # Common OpenHands/ACP/ICU base. .NET toolchain layers are detected and cached per repository.
+  detect_dotnet: true
   image: devagent-sandbox:latest
   workspaces_dir: /var/lib/devagent/workspaces          # path inside the orchestrator container
   host_workspaces_dir: ${DEVAGENT_HOST_WORKSPACES}      # same directory on the Docker host

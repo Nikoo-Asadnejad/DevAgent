@@ -101,7 +101,9 @@ class GuardrailsConfig(Settings):
 
 class SandboxConfig(Settings):
     image: str = "devagent-sandbox:latest"
-    """OpenHands agent-server image with the Codex ACP CLI and repo toolchains installed."""
+    """Common OpenHands/ACP base image; detected toolchains are cached as derived images."""
+    detect_dotnet: bool = True
+    """Disable only when using a custom image that already supplies the required toolchain."""
     workspaces_dir: str = "/var/lib/devagent/workspaces"
     """Where the orchestrator clones repos (one directory per run)."""
     host_workspaces_dir: str | None = None
